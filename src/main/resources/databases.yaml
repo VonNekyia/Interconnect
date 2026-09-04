@@ -1,0 +1,33 @@
+adminer-editor:
+  enabled: true
+  host: 127.0.0.1
+  port: 8090
+
+local-mariadb:
+  port: 13306
+
+plugin-versions:
+  selected: "26.2"
+  folder-pattern: "plugins-%version%"
+  plugins:
+    - BetonQuest
+    - Citizens
+    - FastAsyncWorldEdit
+    - LuckPerms
+    - Nations
+    - Nexo
+    - Opibus
+    - PacketEvents
+    - Pl3xMap
+    - Proficisci
+    - TerranovaLib
+    - WorldGuard
+
+databases:
+  - network
+  - nations
+
+accounts:
+  - username: minecraft
+    password: minecraft
+    root: true

@@ -12,6 +12,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -22,6 +24,7 @@ public final class LocalMariaDbService {
     private static final Pattern DATABASE_NAME = Pattern.compile("[a-z0-9_]{1,64}");
     private static final Pattern ACCOUNT_NAME = Pattern.compile("[A-Za-z0-9_]{1,32}");
     private static final List<String> ACCOUNT_HOSTS = List.of("localhost", "%");
+    private static final DateTimeFormatter BACKUP_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private final Plugin plugin;
     private final DatabaseConfig config;
@@ -47,6 +50,25 @@ public final class LocalMariaDbService {
         databaseConfig.setDataDir(dataDirectory.toFile());
         databaseConfig.setSecurityDisabled(false);
 
+        try {
+            startDatabase(databaseConfig);
+        } catch (Exception exception) {
+            if (!isRecoverableDataDirectoryFailure(exception, dataDirectory)) {
+                throw exception;
+            }
+
+            Path backupDirectory = databaseFolder.resolve("data-broken-" + BACKUP_TIMESTAMP.format(LocalDateTime.now()));
+            plugin.getLogger().warning("Local MariaDB data directory looks broken or locked. Moving it to " + backupDirectory.getFileName() + " and starting with a clean test database.");
+            stop();
+            Files.move(dataDirectory, backupDirectory);
+            Files.createDirectories(dataDirectory);
+            startDatabase(databaseConfig);
+        }
+
+        plugin.getLogger().info("Local MariaDB test server started on port " + database.getConfiguration().getPort() + ".");
+    }
+
+    private void startDatabase(DBConfigurationBuilder databaseConfig) throws Exception {
         ClassLoader previousClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(plugin.getClass().getClassLoader());
         try {
@@ -56,8 +78,6 @@ public final class LocalMariaDbService {
         } finally {
             Thread.currentThread().setContextClassLoader(previousClassLoader);
         }
-
-        plugin.getLogger().info("Local MariaDB test server started on port " + database.getConfiguration().getPort() + ".");
     }
 
     public void stop() {
@@ -69,6 +89,8 @@ public final class LocalMariaDbService {
             database.stop();
         } catch (Exception exception) {
             plugin.getLogger().warning("Could not stop the local MariaDB test server: " + exception.getMessage());
+        } finally {
+            database = null;
         }
     }
 
@@ -188,6 +210,34 @@ public final class LocalMariaDbService {
         if (database == null) {
             throw new IllegalStateException("The local MariaDB test server is not running.");
         }
+    }
+
+    private static boolean isRecoverableDataDirectoryFailure(Exception exception, Path dataDirectory) {
+        if (Files.notExists(dataDirectory.resolve("ibdata1"))) {
+            return false;
+        }
+
+        String message = stackTraceMessage(exception).toLowerCase(Locale.ROOT);
+        return message.contains("ibdata1")
+            || message.contains("innodb")
+            || message.contains("unknown/unsupported storage engine")
+            || message.contains("must be writable");
+    }
+
+    private static String stackTraceMessage(Throwable throwable) {
+        StringBuilder message = new StringBuilder();
+        while (throwable != null) {
+            if (throwable.getMessage() != null) {
+                message.append(throwable.getMessage()).append('\n');
+            }
+            for (Throwable suppressed : throwable.getSuppressed()) {
+                if (suppressed.getMessage() != null) {
+                    message.append(suppressed.getMessage()).append('\n');
+                }
+            }
+            throwable = throwable.getCause();
+        }
+        return message.toString();
     }
 
     private static String databaseName(String pluginName) {

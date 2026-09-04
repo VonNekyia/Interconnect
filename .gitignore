@@ -20,6 +20,16 @@ hs_err_pid*
 # Common working directory
 run
 
+# Delivered test server: keep the runnable skeleton and Interconnect jar,
+# ignore generated worlds, caches, logs, and third-party runtime output.
+server/*
+!server/eula.txt
+!server/start.bat
+!server/paper-26.2-121.jar
+!server/plugins/
+server/plugins/*
+!server/plugins/Interconnect-1.0.0.jar
+
 # Bundled plugin runtime output and history
 plugins-*/**/logs/
 plugins-*/**/.assetCache/

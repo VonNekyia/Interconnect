@@ -28,12 +28,12 @@ public final class PluginVersionSyncService {
     public SyncResult syncSelectedVersion() {
         Path targetPluginsFolder = plugin.getDataFolder().toPath().toAbsolutePath().normalize().getParent();
         if (targetPluginsFolder == null) {
-            return new SyncResult(0, List.of("Could not resolve the server plugins folder."));
+            return new SyncResult(0, 0, List.of("Could not resolve the server plugins folder."));
         }
 
         Path serverRoot = targetPluginsFolder.getParent();
         if (serverRoot == null) {
-            return new SyncResult(0, List.of("Could not resolve the server root folder."));
+            return new SyncResult(0, 0, List.of("Could not resolve the server root folder."));
         }
 
         Path sourceFolder = findSourceFolder(serverRoot);
@@ -43,6 +43,7 @@ public final class PluginVersionSyncService {
 
         List<String> errors = new ArrayList<>();
         int copied = 0;
+        int copiedJars = 0;
         try {
             Files.createDirectories(targetPluginsFolder);
             try (Stream<Path> children = Files.list(sourceFolder)) {
@@ -51,6 +52,7 @@ public final class PluginVersionSyncService {
                     if (Files.isRegularFile(child) && child.getFileName().toString().toLowerCase().endsWith(".jar")) {
                         if (copyFileIfChanged(child, target, errors)) {
                             copied++;
+                            copiedJars++;
                         }
                     } else if (Files.isDirectory(child)) {
                         copied += copyDirectory(child, target, errors);
@@ -61,7 +63,7 @@ public final class PluginVersionSyncService {
             errors.add(exception.getMessage());
         }
 
-        return new SyncResult(copied, List.copyOf(errors));
+        return new SyncResult(copied, copiedJars, List.copyOf(errors));
     }
 
     private Path findSourceFolder(Path serverRoot) {
@@ -86,6 +88,7 @@ public final class PluginVersionSyncService {
         String resourcePrefix = "plugin-versions/" + config.pluginVersionFolderName() + "/";
         List<String> errors = new ArrayList<>();
         int copied = 0;
+        int copiedJars = 0;
 
         try (JarFile jarFile = new JarFile(pluginJarPath().toFile())) {
             Enumeration<JarEntry> entries = jarFile.entries();
@@ -104,6 +107,9 @@ public final class PluginVersionSyncService {
                 try (InputStream inputStream = jarFile.getInputStream(entry)) {
                     if (copyStreamIfChanged(inputStream, target, errors)) {
                         copied++;
+                        if (relativePath.toLowerCase().endsWith(".jar")) {
+                            copiedJars++;
+                        }
                     }
                 }
             }
@@ -115,7 +121,7 @@ public final class PluginVersionSyncService {
             errors.add("Plugin version folder was not found externally or inside the plugin jar: " + config.pluginVersionFolderName());
         }
 
-        return new SyncResult(copied, List.copyOf(errors));
+        return new SyncResult(copied, copiedJars, List.copyOf(errors));
     }
 
     private Path pluginJarPath() throws URISyntaxException {
@@ -173,6 +179,6 @@ public final class PluginVersionSyncService {
         }
     }
 
-    public record SyncResult(int copiedFiles, List<String> errors) {
+    public record SyncResult(int copiedFiles, int copiedJars, List<String> errors) {
     }
 }

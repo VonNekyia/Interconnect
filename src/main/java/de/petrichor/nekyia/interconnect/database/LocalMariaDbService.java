@@ -5,6 +5,7 @@ import ch.vorburger.mariadb4j.DBConfigurationBuilder;
 import de.petrichor.nekyia.interconnect.config.DatabaseConfig;
 import org.bukkit.plugin.Plugin;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -12,19 +13,23 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 public final class LocalMariaDbService {
     private static final Pattern DATABASE_NAME = Pattern.compile("[a-z0-9_]{1,64}");
     private static final Pattern ACCOUNT_NAME = Pattern.compile("[A-Za-z0-9_]{1,32}");
     private static final List<String> ACCOUNT_HOSTS = List.of("localhost", "%");
     private static final DateTimeFormatter BACKUP_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(15);
 
     private final Plugin plugin;
     private final DatabaseConfig config;
@@ -50,6 +55,8 @@ public final class LocalMariaDbService {
         databaseConfig.setDataDir(dataDirectory.toFile());
         databaseConfig.setSecurityDisabled(false);
 
+        boolean releasedDataDirectory = terminateLeftoverServers(baseFolder, dataDirectory);
+
         try {
             startDatabase(databaseConfig);
         } catch (Exception exception) {
@@ -57,12 +64,17 @@ public final class LocalMariaDbService {
                 throw exception;
             }
 
-            Path backupDirectory = databaseFolder.resolve("data-broken-" + BACKUP_TIMESTAMP.format(LocalDateTime.now()));
-            plugin.getLogger().warning("Local MariaDB data directory looks broken or locked. Moving it to " + backupDirectory.getFileName() + " and starting with a clean test database.");
             stop();
-            Files.move(dataDirectory, backupDirectory);
-            Files.createDirectories(dataDirectory);
-            startDatabase(databaseConfig);
+            if (releasedDataDirectory || terminateLeftoverServers(baseFolder, dataDirectory)) {
+                plugin.getLogger().warning("Retrying the local MariaDB test server now that the data directory is no longer locked.");
+                startDatabase(databaseConfig);
+            } else {
+                Path backupDirectory = databaseFolder.resolve("data-broken-" + BACKUP_TIMESTAMP.format(LocalDateTime.now()));
+                plugin.getLogger().warning("Local MariaDB data directory looks broken. Moving it to " + backupDirectory.getFileName() + " and starting with a clean test database.");
+                Files.move(dataDirectory, backupDirectory);
+                Files.createDirectories(dataDirectory);
+                startDatabase(databaseConfig);
+            }
         }
 
         plugin.getLogger().info("Local MariaDB test server started on port " + database.getConfiguration().getPort() + ".");
@@ -77,6 +89,82 @@ public final class LocalMariaDbService {
             database.start();
         } finally {
             Thread.currentThread().setContextClassLoader(previousClassLoader);
+        }
+    }
+
+    /**
+     * A server that was killed instead of stopped leaves its mysqld process running. That process keeps
+     * the data directory locked, so the next boot fails with "The data file './ibdata1' must be writable".
+     */
+    private boolean terminateLeftoverServers(Path baseFolder, Path dataDirectory) {
+        List<ProcessHandle> leftovers = leftoverServers(baseFolder);
+        if (leftovers.isEmpty()) {
+            deletePidFiles(dataDirectory);
+            return false;
+        }
+
+        plugin.getLogger().warning("Found " + leftovers.size() + " MariaDB process(es) left over from a previous server run. Shutting them down before starting.");
+        boolean shutdownRequested = requestShutdown();
+        for (ProcessHandle leftover : leftovers) {
+            terminate(leftover, shutdownRequested);
+        }
+        deletePidFiles(dataDirectory);
+        return true;
+    }
+
+    private List<ProcessHandle> leftoverServers(Path baseFolder) {
+        Path binaryFolder = baseFolder.toAbsolutePath().normalize().resolve("bin");
+        List<Path> executables = List.of(binaryFolder.resolve("mysqld.exe"), binaryFolder.resolve("mysqld"));
+        return ProcessHandle.allProcesses()
+            .filter(process -> process.info().command()
+                .map(command -> executables.contains(Path.of(command).toAbsolutePath().normalize()))
+                .orElse(false))
+            .toList();
+    }
+
+    private boolean requestShutdown() {
+        String rootUrl = DBConfigurationBuilder.newBuilder().setPort(config.localMariaDbPort()).build().getURL("");
+        try {
+            Class.forName("org.mariadb.jdbc.Driver", true, plugin.getClass().getClassLoader());
+            try (Connection connection = DriverManager.getConnection(rootUrl, "root", "");
+                 Statement statement = connection.createStatement()) {
+                statement.execute("SHUTDOWN");
+            }
+            return true;
+        } catch (Exception exception) {
+            plugin.getLogger().fine("Could not ask the leftover MariaDB server for a clean shutdown: " + exception.getMessage());
+            return false;
+        }
+    }
+
+    private void terminate(ProcessHandle process, boolean shutdownRequested) {
+        if (shutdownRequested && awaitExit(process)) {
+            return;
+        }
+
+        process.destroy();
+        if (!awaitExit(process)) {
+            process.destroyForcibly();
+            awaitExit(process);
+        }
+    }
+
+    private boolean awaitExit(ProcessHandle process) {
+        try {
+            process.onExit().get(SHUTDOWN_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+            return true;
+        } catch (Exception exception) {
+            return !process.isAlive();
+        }
+    }
+
+    private void deletePidFiles(Path dataDirectory) {
+        try (Stream<Path> files = Files.list(dataDirectory)) {
+            for (Path file : files.filter(file -> file.getFileName().toString().endsWith(".pid")).toList()) {
+                Files.deleteIfExists(file);
+            }
+        } catch (IOException exception) {
+            plugin.getLogger().warning("Could not delete stale MariaDB pid files: " + exception.getMessage());
         }
     }
 

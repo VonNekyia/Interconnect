@@ -19,7 +19,13 @@ public final class Interconnect extends JavaPlugin {
 
         PluginVersionSyncService.SyncResult syncResult = new PluginVersionSyncService(this, databaseConfig).syncSelectedVersion();
         if (syncResult.copiedFiles() > 0) {
-            getLogger().info("Copied " + syncResult.copiedFiles() + " file(s) from " + databaseConfig.pluginVersionFolderName() + ". Restart the server to load newly copied plugin jars.");
+            getLogger().info("Copied " + syncResult.copiedFiles() + " file(s) from " + databaseConfig.pluginVersionFolderName() + ".");
+            if (syncResult.copiedJars() > 0) {
+                getLogger().warning("Copied " + syncResult.copiedJars() + " plugin jar(s), but Paper has already scanned plugins for this boot.");
+                getLogger().warning("Stopping the server now. Start it again to load the synchronized plugin set.");
+                getServer().getScheduler().runTask(this, () -> getServer().shutdown());
+                return;
+            }
         }
         for (String error : syncResult.errors()) {
             getLogger().warning(error);

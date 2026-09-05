@@ -3,9 +3,9 @@ rem Builds the runnable server folder from this template and starts it.
 rem Running this file is the only step needed - the server folder is generated
 rem and can be deleted at any time.
 rem
-rem Paper reads server.properties and config\ during bootstrap, before any plugin
-rem loads, so Interconnect cannot deploy them itself. They are deployed here,
-rem while the JVM is not running yet.
+rem Paper reads server.properties and config\ during bootstrap, and plugins read
+rem their own configs while they load, both before Interconnect can do anything.
+rem Everything is therefore deployed here, while the JVM is not running yet.
 cd /d "%~dp0"
 set "DEST=..\server"
 
@@ -23,8 +23,13 @@ for %%F in (server.properties bukkit.yml spigot.yml commands.yml) do (
 )
 if exist "config" xcopy "config\*" "%DEST%\config\" /E /Y /I >nul
 
-rem Plugins shipped with the template. Interconnect deploys the rest from
-rem plugins-26.2 once it is running.
+rem Plugin jars and their configs. Interconnect syncs these as well, but only
+rem after Paper has scanned plugins and after plugins like LuckPerms have read
+rem their config, which costs a restart on a freshly created server folder.
+rem Copying them here means one launch is enough.
+if exist "..\plugins-26.2" xcopy "..\plugins-26.2\*" "%DEST%\plugins\" /E /Y /I >nul
+
+rem Anything shipped in this template wins over plugins-26.2.
 if exist "plugins" xcopy "plugins\*" "%DEST%\plugins\" /E /Y /I >nul
 
 rem Runtime state: seed only when missing, so /op and /whitelist survive.

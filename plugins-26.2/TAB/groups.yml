@@ -8,17 +8,15 @@ Player:
 # Default settings for all groups. A group's own section overrides these.
 # Valid properties: tagprefix, tagsuffix, tabprefix, tabsuffix, customtabname
 #
-# These read through ChatControl rather than LuckPerms directly, which is what
-# ChatControl asks for when TAB is installed. ChatControl still sources the
-# prefix from LuckPerms via Vault, but routing it through ChatControl means a
-# player's nickname and ChatControl's own formatting show up in the tablist and
-# above their head, not just in chat.
+# These use TAB's native LuckPerms placeholders. ChatControl registers its
+# PlaceholderAPI expansion after TAB enables, which can leave ChatControl
+# placeholders rendered literally in the tab list.
 _DEFAULT_:
-  tabprefix: "%chatcontrol_player_prefix_section% "
-  tagprefix: "%chatcontrol_player_prefix_section% "
-  customtabname: "%chatcontrol_player_nick_section%"
-  tabsuffix: "%chatcontrol_player_suffix_section%"
-  tagsuffix: "%chatcontrol_player_suffix_section%"
+  tabprefix: "%luckperms-prefix%"
+  tagprefix: "%luckperms-prefix%"
+  customtabname: "%player%"
+  tabsuffix: "%luckperms-suffix%"
+  tagsuffix: "%luckperms-suffix%"
 
 per-world:
   world1:

@@ -224,9 +224,8 @@ placeholder-refresh-intervals:
   '%player_health%': 200
   '%player_ping%': 1000
   '%vault_prefix%': 1000
-  '%chatcontrol_player_prefix_section%': 1000
-  '%chatcontrol_player_suffix_section%': 1000
-  '%chatcontrol_player_nick_section%': 1000
+  '%luckperms-prefix%': 1000
+  '%luckperms-suffix%': 1000
   '%rel_factionsuuid_relation_color%': 1000
 config-version: 7
 components:

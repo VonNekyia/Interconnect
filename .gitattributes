@@ -9,7 +9,7 @@
 
 # Binary files should be left untouched
 *.jar           binary
-server/plugins/Interconnect-1.0.0.jar filter=lfs diff=lfs merge=lfs -text
+server-26.2/plugins/*.jar filter=lfs diff=lfs merge=lfs -text
 *.zip           binary
 *.png           binary
 *.ico           binary

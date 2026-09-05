@@ -11,13 +11,41 @@ public final class Interconnect extends JavaPlugin {
     private DatabaseConfig databaseConfig;
     private LocalMariaDbService databaseService;
     private AdminerEditorServer adminerEditorServer;
+    private PluginVersionSyncService.SyncResult syncResult;
+    private Exception databaseFailure;
 
     @Override
-    public void onEnable() {
+    public void onLoad() {
+        // Plugins open their database connections while they enable, and some of them
+        // enable before this one does. LuckPerms is the example: it enabled seventeen
+        // seconds before the database was up and gave up after a five second timeout.
+        // Running the sync and the database here means both are ready before any
+        // plugin's onEnable.
         databaseConfig = new DatabaseConfig(this);
         databaseConfig.load();
 
-        PluginVersionSyncService.SyncResult syncResult = new PluginVersionSyncService(this, databaseConfig).syncSelectedVersion();
+        syncResult = new PluginVersionSyncService(this, databaseConfig).syncSelectedVersion();
+
+        databaseService = new LocalMariaDbService(this, databaseConfig);
+        try {
+            databaseService.start();
+            databaseService.ensureDatabases(databaseConfig.allDatabaseNames());
+            databaseService.ensureAccounts(databaseConfig.accounts());
+        } catch (Exception exception) {
+            // The plugin manager and the scheduler reject calls from a plugin that is
+            // not enabled yet, so keep the failure and report it from onEnable.
+            databaseFailure = exception;
+        }
+    }
+
+    @Override
+    public void onEnable() {
+        if (databaseFailure != null) {
+            getLogger().log(java.util.logging.Level.SEVERE, "Could not start the local MariaDB test server.", databaseFailure);
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
         if (syncResult.copiedFiles() > 0) {
             getLogger().info("Copied " + syncResult.copiedFiles() + " file(s) from " + databaseConfig.pluginVersionFolderName() + ".");
             if (syncResult.copiedJars() > 0) {
@@ -29,17 +57,6 @@ public final class Interconnect extends JavaPlugin {
         }
         for (String error : syncResult.errors()) {
             getLogger().warning(error);
-        }
-
-        databaseService = new LocalMariaDbService(this, databaseConfig);
-        try {
-            databaseService.start();
-            databaseService.ensureDatabases(databaseConfig.allDatabaseNames());
-            databaseService.ensureAccounts(databaseConfig.accounts());
-        } catch (Exception exception) {
-            getLogger().log(java.util.logging.Level.SEVERE, "Could not start the local MariaDB test server.", exception);
-            getServer().getPluginManager().disablePlugin(this);
-            return;
         }
 
         adminerEditorServer = new AdminerEditorServer(this, databaseConfig, databaseService);

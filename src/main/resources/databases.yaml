@@ -27,6 +27,9 @@ databases:
   - network
   - nations
   - betonquest
+  - chatcontrol
+  - interactivechat
+  - luckperms
 
 accounts:
   - username: minecraft

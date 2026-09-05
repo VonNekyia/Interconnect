@@ -41,17 +41,29 @@ public final class DatabaseConfig {
                       folder-pattern: "plugins-%version%"
                       plugins:
                         - BetonQuest
+                        - ChatControl
                         - Citizens
                         - FastAsyncWorldEdit
+                        - InteractiveChat
+                        - InteractiveChat-PacketEvents
                         - LuckPerms
                         - Nations
                         - Nexo
-                        - Opibus
                         - PacketEvents
+                        - PlaceholderAPI
                         - Pl3xMap
+                        - PlayerActionAdapter
                         - Proficisci
                         - TerranovaLib
+                        - Vault
                         - WorldGuard
+
+                    bootstrap:
+                      commands:
+                        - 'lp group default permission set chatcontrol.channel.standard true'
+                        - 'lp group default permission set chatcontrol.channel.join.standard.write true'
+                        - 'lp group default permission set chatcontrol.channel.autojoin.standard.write true'
+                        - 'lp group default meta setprefix 100 "&7[Player] "'
 
                     databases:
                       - network
@@ -156,6 +168,10 @@ public final class DatabaseConfig {
         return List.copyOf(accounts);
     }
 
+    public List<String> bootstrapCommands() {
+        return List.copyOf(config.getStringList("bootstrap.commands"));
+    }
+
     public boolean addDatabase(String databaseName) {
         List<String> databases = new ArrayList<>(databases());
         if (databases.stream().anyMatch(existing -> existing.equalsIgnoreCase(databaseName))) {
@@ -240,6 +256,11 @@ public final class DatabaseConfig {
             changed = true;
         }
 
+        if (!config.isList("bootstrap.commands")) {
+            config.set("bootstrap.commands", defaultBootstrapCommands());
+            changed = true;
+        }
+
         if (changed) {
             save();
         }
@@ -251,17 +272,31 @@ public final class DatabaseConfig {
     private static List<String> defaultPluginNames() {
         return List.of(
             "BetonQuest",
+            "ChatControl",
             "Citizens",
             "FastAsyncWorldEdit",
+            "InteractiveChat",
+            "InteractiveChat-PacketEvents",
             "LuckPerms",
             "Nations",
             "Nexo",
-            "Opibus",
             "PacketEvents",
+            "PlaceholderAPI",
             "Pl3xMap",
+            "PlayerActionAdapter",
             "Proficisci",
             "TerranovaLib",
+            "Vault",
             "WorldGuard"
+        );
+    }
+
+    private static List<String> defaultBootstrapCommands() {
+        return List.of(
+            "lp group default permission set chatcontrol.channel.standard true",
+            "lp group default permission set chatcontrol.channel.join.standard.write true",
+            "lp group default permission set chatcontrol.channel.autojoin.standard.write true",
+            "lp group default meta setprefix 100 \"&7[Player] \""
         );
     }
 }

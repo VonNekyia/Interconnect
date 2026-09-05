@@ -11,17 +11,29 @@ plugin-versions:
   folder-pattern: "plugins-%version%"
   plugins:
     - BetonQuest
+    - ChatControl
     - Citizens
     - FastAsyncWorldEdit
+    - InteractiveChat
+    - InteractiveChat-PacketEvents
     - LuckPerms
     - Nations
     - Nexo
-    - Opibus
     - PacketEvents
+    - PlaceholderAPI
     - Pl3xMap
+    - PlayerActionAdapter
     - Proficisci
     - TerranovaLib
+    - Vault
     - WorldGuard
+
+bootstrap:
+  commands:
+    - 'lp group default permission set chatcontrol.channel.standard true'
+    - 'lp group default permission set chatcontrol.channel.join.standard.write true'
+    - 'lp group default permission set chatcontrol.channel.autojoin.standard.write true'
+    - 'lp group default meta setprefix 100 "&7[Player] "'
 
 databases:
   - network

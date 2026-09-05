@@ -8,33 +8,37 @@ rem their own configs while they load, both before Interconnect can do anything.
 rem Everything is therefore deployed here, while the JVM is not running yet.
 cd /d "%~dp0"
 set "DEST=..\server"
+for %%I in ("%CD%") do set "SOURCE_ABS=%%~fI"
+for %%I in ("%DEST%") do set "DEST_ABS=%%~fI"
 
 if not exist "%DEST%" mkdir "%DEST%"
 if not exist "%DEST%\plugins" mkdir "%DEST%\plugins"
 
-rem Server jar and EULA: seed once.
-for %%F in (paper-26.2-121.jar eula.txt) do (
-    if not exist "%DEST%\%%F" if exist "%%F" copy "%%F" "%DEST%\%%F" >nul
-)
+if /I not "%SOURCE_ABS%"=="%DEST_ABS%" (
+    rem Server jar and EULA: seed once.
+    for %%F in (paper-26.2-121.jar eula.txt) do (
+        if not exist "%DEST%\%%F" if exist "%%F" copy "%%F" "%DEST%\%%F" >nul
+    )
 
-rem Config: this folder is the source of truth, so overwrite.
-for %%F in (server.properties bukkit.yml spigot.yml commands.yml) do (
-    if exist "%%F" copy /Y "%%F" "%DEST%\%%F" >nul
-)
-if exist "config" xcopy "config\*" "%DEST%\config\" /E /Y /I >nul
+    rem Config: this folder is the source of truth, so overwrite.
+    for %%F in (server.properties bukkit.yml spigot.yml commands.yml) do (
+        if exist "%%F" copy /Y "%%F" "%DEST%\%%F" >nul
+    )
+    if exist "config" xcopy "config\*" "%DEST%\config\" /E /Y /I >nul
 
-rem Plugin jars and their configs. Interconnect syncs these as well, but only
-rem after Paper has scanned plugins and after plugins like LuckPerms have read
-rem their config, which costs a restart on a freshly created server folder.
-rem Copying them here means one launch is enough.
-if exist "..\plugins-26.2" xcopy "..\plugins-26.2\*" "%DEST%\plugins\" /E /Y /I >nul
+    rem Plugin jars and their configs. Interconnect syncs these as well, but only
+    rem after Paper has scanned plugins and after plugins like LuckPerms have read
+    rem their config, which costs a restart on a freshly created server folder.
+    rem Copying them here means one launch is enough.
+    if exist "..\plugins-26.2" xcopy "..\plugins-26.2\*" "%DEST%\plugins\" /E /Y /I >nul
 
-rem Anything shipped in this template wins over plugins-26.2.
-if exist "plugins" xcopy "plugins\*" "%DEST%\plugins\" /E /Y /I >nul
+    rem Anything shipped in this template wins over plugins-26.2.
+    if exist "plugins" xcopy "plugins\*" "%DEST%\plugins\" /E /Y /I >nul
 
-rem Runtime state: seed only when missing, so /op and /whitelist survive.
-for %%F in (ops.json whitelist.json banned-players.json banned-ips.json) do (
-    if not exist "%DEST%\%%F" if exist "%%F" copy "%%F" "%DEST%\%%F" >nul
+    rem Runtime state: seed only when missing, so /op and /whitelist survive.
+    for %%F in (ops.json whitelist.json banned-players.json banned-ips.json) do (
+        if not exist "%DEST%\%%F" if exist "%%F" copy "%%F" "%DEST%\%%F" >nul
+    )
 )
 
 cd /d "%DEST%"

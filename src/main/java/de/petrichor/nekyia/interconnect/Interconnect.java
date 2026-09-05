@@ -5,14 +5,18 @@ import de.petrichor.nekyia.interconnect.config.DatabaseConfig;
 import de.petrichor.nekyia.interconnect.database.AdminerEditorServer;
 import de.petrichor.nekyia.interconnect.database.LocalMariaDbService;
 import de.petrichor.nekyia.interconnect.plugin.PluginVersionSyncService;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class Interconnect extends JavaPlugin {
+public final class Interconnect extends JavaPlugin implements Listener {
     private DatabaseConfig databaseConfig;
     private LocalMariaDbService databaseService;
     private AdminerEditorServer adminerEditorServer;
     private PluginVersionSyncService.SyncResult syncResult;
     private Exception databaseFailure;
+    private Thread databaseShutdownHook;
 
     @Override
     public void onLoad() {
@@ -29,6 +33,8 @@ public final class Interconnect extends JavaPlugin {
         databaseService = new LocalMariaDbService(this, databaseConfig);
         try {
             databaseService.start();
+            databaseShutdownHook = new Thread(databaseService::stop, "Interconnect MariaDB shutdown");
+            Runtime.getRuntime().addShutdownHook(databaseShutdownHook);
             databaseService.ensureDatabases(databaseConfig.allDatabaseNames());
             databaseService.ensureAccounts(databaseConfig.accounts());
         } catch (Exception exception) {
@@ -71,6 +77,18 @@ public final class Interconnect extends JavaPlugin {
         DbCommand dbCommand = new DbCommand(this, databaseConfig, databaseService, adminerEditorServer);
         getCommand("db").setExecutor(dbCommand);
         getCommand("db").setTabCompleter(dbCommand);
+        getServer().getPluginManager().registerEvents(this, this);
+    }
+
+    @EventHandler
+    public void onServerLoad(ServerLoadEvent event) {
+        for (String command : databaseConfig.bootstrapCommands()) {
+            if (command == null || command.isBlank()) {
+                continue;
+            }
+
+            getServer().dispatchCommand(getServer().getConsoleSender(), command);
+        }
     }
 
     @Override
@@ -80,7 +98,7 @@ public final class Interconnect extends JavaPlugin {
         }
 
         if (databaseService != null) {
-            databaseService.stop();
+            getLogger().info("Local MariaDB will stop after the JVM begins shutting down.");
         }
     }
 }
